@@ -24,22 +24,24 @@ jobs:
           rsync -a \
             --exclude='.git' --exclude='.github' --exclude='www' \
             --exclude='android' --exclude='node_modules' \
-            --exclude='*.yml' --exclude='icon.png' \
+            --exclude='*.yml' --exclude='icon.png' --exclude='sw.js' \
+            --exclude='package.json' --exclude='package-lock.json' \
+            --exclude='capacitor.config.json' \
             ./ www/
           ls -la www
 
-      - name: Installer Capacitor et créer le projet Android
+      - name: Installer Capacitor, plugins et créer le projet Android
         run: |
           npm init -y
-          npm i @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+          npm i @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-community/media@8.0.1 @capacitor/filesystem@7.1.9 @capacitor/share@7.0.4
           npx cap init "Télescope Mahfoud" com.mahmoh1960.telescope --web-dir www
           npx cap add android
           npx cap sync android
 
-      - name: Autoriser la caméra
+      - name: Autoriser caméra et micro
         run: |
-          sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application|' android/app/src/main/AndroidManifest.xml
-          grep -n "CAMERA" android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application|' android/app/src/main/AndroidManifest.xml
+          grep -n "uses-permission\|uses-feature" android/app/src/main/AndroidManifest.xml
 
       - name: Icône de l'application (icon.png)
         run: |
