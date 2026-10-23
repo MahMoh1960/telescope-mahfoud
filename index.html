@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Télescope PWA Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #0a0f1d;
+            color: #ffd700;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+        #viewfinder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        header {
+            background: rgba(10, 15, 29, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #ffd700;
+        }
+        h1 {
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+        .controls {
+            background: rgba(10, 15, 29, 0.85);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #ffd700;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .zoom-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        label {
+            font-size: 0.9rem;
+            font-weight: bold;
+            min-width: 60px;
+        }
+        input[type=range] {
+            flex-grow: 1;
+            accent-color: #ffd700;
+            height: 8px;
+        }
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+        }
+        button {
+            flex: 1;
+            background-color: #ffd700;
+            color: #0a0f1d;
+            border: none;
+            padding: 12px;
+            font-weight: bold;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:active {
+            background-color: #cca600;
+        }
+        #reticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 2px dashed rgba(255, 215, 0, 0.6);
+            border-radius: 50%;
+            z-index: 1;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #reticle::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background-color: #ffd700;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="viewfinder" autoplay playsinline></video>
+    <div id="reticle"></div>
+
+    <div class="overlay">
+        <header class="interactive">
+            <h1>TÉLESCOPE PWA</h1>
+        </header>
+
+        <div class="controls interactive">
+            <div class="zoom-group">
+                <label id="zoom-label">Zoom: 1x</label>
+                <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
+            </div>
+            <div class="btn-row">
+                <button id="toggleCam">Changer Caméra</button>
+                <button id="captureBtn">Capturer</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="snapshotCanvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('viewfinder');
+        const zoomRange = document.getElementById('zoomRange');
+        const zoomLabel = document.getElementById('zoom-label');
+        const toggleCamBtn = document.getElementById('toggleCam');
+        const captureBtn = document.getElementById('captureBtn');
+
+        let videoStream = null;
+        let track = null;
+        let useFrontCamera = false;
+
+        async function startCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(t => t.stop());
+            }
+
+            const constraints = {
+                video: {
+                    facingMode: useFrontCamera ? 'user' : 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                },
+                audio: false
+            };
+
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = videoStream;
+                track = videoStream.getVideoTracks()[0];
+
+                // Vérifier si le capteur supporte le zoom matériel
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    zoomRange.min = capabilities.zoom.min;
+                    zoomRange.max = capabilities.zoom.max;
+                    zoomRange.step = capabilities.zoom.step || 0.1;
+                    zoomRange.value = capabilities.zoom.min;
+                } else {
+                    // Fallback si le zoom matériel n'est pas exposé directement par le navigateur
+                    zoomRange.min = 1;
+                    zoomRange.max = 5;
+                    zoomRange.step = 0.1;
+                    zoomRange.value = 1;
+                }
+            } catch (err) {
+                alert("Erreur d'accès à la caméra : " + err.message);
+            }
+        }
+
+        // Gestion du zoom
+        zoomRange.addEventListener('input', async (e) => {
+            const val = parseFloat(e.target.value);
+            zoomLabel.innerText = `Zoom: ${val.toFixed(1)}x`;
+
+            if (track) {
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    try {
+                        await track.applyConstraints({ advanced: [{ zoom: val }] });
+                    } catch (err) {
+                        console.error("Erreur d'application du zoom matériel", err);
+                    }
+                } else {
+                    // Zoom numérique via CSS transform si le zoom matériel n'est pas dispo
+                    video.style.transform = `scale(${val})`;
+                }
+            }
+        });
+
+        toggleCamBtn.addEventListener('click', () => {
+            useFrontCamera = !useFrontCamera;
+            startCamera();
+        });
+
+        captureBtn.addEventListener('click', () => {
+            const canvas = document.getElementById('snapshotCanvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const link = document.createElement('a');
+            link.download = 'telescope-capture.png';
+            link.href = canvas.toDataURL('image/png');
+            link.link.click();
+        });
+
+        window.addEventListener('load', startCamera);
+    </script>
+</body>
+</html>
