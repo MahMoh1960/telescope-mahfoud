@@ -43,6 +43,7 @@ jobs:
 
       - name: Icône de l'application (icon.png)
         run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
           if [ -f icon.png ]; then
             R=android/app/src/main/res
             rm -rf $R/mipmap-anydpi-v26
@@ -66,3 +67,4 @@ jobs:
         with:
           name: telescope-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+Après
