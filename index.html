@@ -41,9 +41,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family
 .zrow{display:flex;align-items:center;gap:8px;margin:4px 0 6px}
 .zrow input{flex:1}
 input[type=range]{accent-color:var(--acc);height:28px;margin:0;width:100%}
-.chips{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px}
-.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
-.main{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.tools .btn{font-size:12px;padding:8px 2px;overflow-wrap:anywhere}
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .btn{background:var(--acc);color:var(--onacc);-webkit-text-fill-color:var(--onacc);border:0;border-radius:10px;font:700 13px/1.15 Roboto,system-ui,Arial,sans-serif;padding:8px 4px;min-height:38px;cursor:pointer}
 .btn.sm{min-width:44px;font-size:20px;padding:4px 10px}
 .btn.big{font-size:18px;min-height:56px;border-radius:12px}
