@@ -322,6 +322,7 @@ function setupRange(rowId,inputId,cap,cur){
   inp.min=cap.min;inp.max=cap.max;inp.step=cap.step||'any';
   inp.value=(cur!=null?cur:cap.min);row.hidden=false;return true;
 }
+function rnd(x){var n=Math.round(parseFloat(x)*100)/100;return String(Object.is(n,-0)?0:n).replace('.',',');}
 function etFromSlider(v){var c=S.caps.exposureTime;return c.min*Math.pow(c.max/c.min,v/1000);}
 function etText(val){var s=val*0.0001;return s<1?('1/'+Math.round(1/s)+' s'):(s.toFixed(1)+' s');}
 function readCaps(){
@@ -339,11 +340,11 @@ function readCaps(){
   if(!manual){$('rowIso').hidden=true;$('rowEt').hidden=true;}
   else{$('rowIso').hidden=!(S.manualExp&&b);$('rowEt').hidden=!(S.manualExp&&d);}
   $('expNone').hidden=a||manual;
-  $('expCo').textContent=a?$('expC').value:'';
-  $('isoo').textContent=b?$('iso').value:'';
+  $('expCo').textContent=a?rnd($('expC').value):'';
+  $('isoo').textContent=b?rnd($('iso').value):'';
   if(d)$('eto').textContent=etText(etFromSlider(500));
 }
-$('expC').oninput=function(){$('expCo').textContent=$('expC').value;adv({exposureCompensation:parseFloat($('expC').value)},true);};
+$('expC').oninput=function(){$('expCo').textContent=rnd($('expC').value);adv({exposureCompensation:parseFloat($('expC').value)},true);};
 $('chkManual').onchange=function(){
   S.manualExp=$('chkManual').checked;
   $('rowIso').hidden=!(S.manualExp&&S.caps.iso);$('rowEt').hidden=!(S.manualExp&&S.caps.exposureTime);
@@ -355,7 +356,7 @@ function applyManual(){
   if(S.caps.exposureTime)o.exposureTime=etFromSlider($('et').value);
   adv(o);
 }
-$('iso').oninput=function(){$('isoo').textContent=$('iso').value;if(S.manualExp)applyManual();};
+$('iso').oninput=function(){$('isoo').textContent=rnd($('iso').value);if(S.manualExp)applyManual();};
 $('et').oninput=function(){$('eto').textContent=etText(etFromSlider($('et').value));if(S.manualExp)applyManual();};
 
 $('btnTorch').onclick=function(){
