@@ -1,15 +1,12 @@
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open('telescope-store').then((cache) => {
-      return cache.addAll(['./index.html', './manifest.json']);
-    })
-  );
-});
-
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    caches.match(e.request).then((response) => {
-      return response || fetch(e.request);
-    })
-  );
+// Ancien service worker remplacé : il supprime les caches et se désinscrit,
+// afin que la nouvelle version de l'application s'affiche toujours.
+self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (e) {
+  e.waitUntil((async function () {
+    var keys = await caches.keys();
+    await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    await self.registration.unregister();
+    var cs = await self.clients.matchAll({ type: 'window' });
+    cs.forEach(function (c) { c.navigate(c.url); });
+  })());
 });
