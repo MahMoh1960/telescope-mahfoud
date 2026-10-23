@@ -116,12 +116,13 @@ select{flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line)
     <button class="btn" data-z="5">5×</button><button class="btn" data-z="10">10×</button>
     <button class="btn" data-z="20">20×</button><button class="btn" data-z="30">30×</button>
   </div>
+  <div class="zrow" id="microRow" hidden><b style="font-size:14px">Focus</b><input type="range" id="focusM" min="0" max="1000" value="0" aria-label="Mise au point macro"><small>proche → loin</small></div>
   <div class="tools">
     <button class="btn" id="btnTimer">Retard : 0 s</button>
     <button class="btn" id="btnMode">Mode : Simple</button>
     <button class="btn" id="btnAuto">Auto-stable : Non</button>
     <button class="btn" id="btnTorch" hidden>Lampe</button>
-    <button class="btn" id="btnGrid">Grille</button>
+    <button class="btn" id="btnMicro">Microscope</button>
     <button class="btn" id="btnRec">● Vidéo</button>
     <button class="btn" id="btnGal">Galerie</button>
     <button class="btn" id="btnSet">Réglages</button>
@@ -359,9 +360,39 @@ function applyManual(){
 $('iso').oninput=function(){$('isoo').textContent=rnd($('iso').value);if(S.manualExp)applyManual();};
 $('et').oninput=function(){$('eto').textContent=etText(etFromSlider($('et').value));if(S.manualExp)applyManual();};
 
-$('btnTorch').onclick=function(){
-  adv({torch:!S.torch}).then(function(ok){if(ok){S.torch=!S.torch;$('btnTorch').classList.toggle('on',S.torch);}});
-};
+function setTorch(v,quiet){
+  return adv({torch:v},quiet).then(function(ok){if(ok){S.torch=v;$('btnTorch').classList.toggle('on',S.torch);}return ok;});
+}
+$('btnTorch').onclick=function(){setTorch(!S.torch);};
+
+/* ---------- Mode microscope (macro) ---------- */
+var focWanted=null,focBusy=false;
+function pushFoc(){
+  if(focBusy||focWanted===null)return;
+  var d=focWanted;focWanted=null;focBusy=true;
+  adv({focusMode:'manual',focusDistance:d},true).then(function(){focBusy=false;pushFoc();});
+}
+function focFromSlider(v){
+  var c=S.caps.focusDistance;
+  return c.min>0?c.min*Math.pow(c.max/c.min,v/1000):c.min+(c.max-c.min)*v/1000;
+}
+$('focusM').addEventListener('input',function(e){if(S.caps.focusDistance){focWanted=focFromSlider(+e.target.value);pushFoc();}});
+function applyMicro(announce){
+  var fd=S.caps.focusDistance,fm=S.caps.focusMode||[];
+  $('btnMicro').classList.toggle('on',S.micro);
+  $('microRow').hidden=!(S.micro&&fd&&fd.min!=null&&fd.max!=null);
+  if(S.micro){
+    if(fd&&fd.min!=null){$('focusM').value=0;adv({focusMode:'manual',focusDistance:fd.min},true);}
+    else if(fm.indexOf('continuous')>=0){adv({focusMode:'continuous'},true);}
+    if(S.caps.torch&&!S.torch){S.microTorch=true;setTorch(true,true);}
+    if(announce)toast('Mode microscope : approchez l’objectif de l’échantillon (quelques cm), réglez « Focus ». Essayez aussi une autre caméra (grand-angle) pour la macro.',5500);
+  }else{
+    adv({focusMode:'continuous'},true);
+    if(S.microTorch){S.microTorch=false;setTorch(false,true);}
+    if(announce)toast('Mode microscope désactivé');
+  }
+}
+$('btnMicro').onclick=function(){S.micro=!S.micro;applyMicro(true);};
 
 /* ---------- Démarrage de la caméra ---------- */
 function stopStream(){
@@ -400,6 +431,7 @@ async function startCamera(){
   try{await v.play();}catch(e){}
   readCaps();await listDevices();
   setZoom(S.zoom);
+  if(S.micro)applyMicro(false);
   try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(function(){});}catch(e){}
 }
 $('btnCam').onclick=async function(){
@@ -739,7 +771,6 @@ $('btnMode').onclick=function(){var m=['simple','burst','stack'];S.mode=m[(m.ind
   if(S.mode==='stack')toast('Empilement : posez le téléphone sur un support fixe',3200);};
 $('btnAuto').onclick=function(){S.auto=!S.auto;refreshUI();save();
   if(S.auto&&!S.hasSensor)toast('Capteurs de mouvement indisponibles : utilisez le retardateur',3200);};
-$('btnGrid').onclick=function(){S.grid=!S.grid;refreshUI();save();};
 $('btnSet').onclick=function(){refreshUI();$('settings').hidden=false;};
 $('setClose').onclick=function(){$('settings').hidden=true;save();};
 
@@ -762,7 +793,6 @@ function refreshUI(){
   $('btnMode').textContent='Mode : '+MODELBL[S.mode];
   $('btnAuto').textContent='Auto-stable : '+(S.auto?'Oui':'Non');
   $('btnAuto').classList.toggle('on',S.auto);
-  $('btnGrid').classList.toggle('on',S.grid);
   $('gridov').hidden=!S.grid;
   $('level').hidden=!S.level;
   document.body.classList.toggle('night',S.night);
