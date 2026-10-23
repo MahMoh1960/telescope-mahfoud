@@ -168,6 +168,7 @@ select{flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line)
     <h3>Capture</h3>
     <div class="row"><label>Images (rafale / empilement)</label>
       <select id="selN"><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></div>
+    <div class="row"><label>Netteté (photos)</label><input type="range" id="sharp" min="0" max="300" step="10"><output id="sharpo"></output></div>
     <div class="row"><label>Tolérance de stabilité</label><input type="range" id="thr" min="1" max="12"><output id="thro"></output></div>
     <div class="hint">Plus la tolérance est élevée, plus la capture automatique se déclenche facilement. Pour l'empilement, posez le téléphone sur un support fixe.</div>
     <div class="row"><label>Résolution</label>
@@ -212,17 +213,17 @@ var MODELBL={simple:'Simple',burst:'Rafale nette',stack:'Empilement'};
 var TIMERS=[0,2,5,10];
 var S={zoom:1,hw:1,zcap:null,caps:{},stream:null,track:null,devices:[],devIdx:-1,deviceId:null,
   timer:0,mode:'simple',auto:false,torch:false,night:false,grid:false,level:false,
-  filter:'normal',bright:100,contrast:100,sat:100,res:'fhd',n:10,thr:4,
+  filter:'normal',bright:100,contrast:100,sat:100,res:'uhd',n:10,thr:4,sharp:60,
   busy:false,cancel:false,rec:null,mov:99,hasSensor:false,roll:0,albumId:null,manualExp:false};
-var KEYS=['timer','mode','auto','night','grid','level','filter','bright','contrast','sat','res','n','thr'];
+var KEYS=['timer','mode','auto','night','grid','level','filter','bright','contrast','sat','res','n','thr','sharp'];
 
 function clamp(x,a,b){return Math.min(b,Math.max(a,x));}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
 function fmt1(x){return x.toFixed(1).replace('.',',');}
 function native(){return !!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());}
 function plug(n){return window.Capacitor&&window.Capacitor.Plugins?window.Capacitor.Plugins[n]:null;}
-function save(){try{var o={};KEYS.forEach(function(k){o[k]=S[k];});localStorage.setItem('telescope.v2',JSON.stringify(o));}catch(e){}}
-function load(){try{var o=JSON.parse(localStorage.getItem('telescope.v2')||'{}');KEYS.forEach(function(k){if(k in o)S[k]=o[k];});}catch(e){}}
+function save(){try{var o={};KEYS.forEach(function(k){o[k]=S[k];});localStorage.setItem('telescope.v3',JSON.stringify(o));}catch(e){}}
+function load(){try{var o=JSON.parse(localStorage.getItem('telescope.v3')||'{}');KEYS.forEach(function(k){if(k in o)S[k]=o[k];});}catch(e){}}
 var tt;
 function toast(m,ms){var t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(function(){t.classList.remove('on');},ms||2200);}
 function setStatus(m){$('status').textContent=m||'';}
@@ -505,6 +506,50 @@ async function countdown(n){
 }
 function flash(){var f=$('flash');f.classList.add('on');setTimeout(function(){f.classList.remove('on');},60);}
 
+/* Photo pleine résolution du capteur (bien plus détaillée que l'image de la vidéo), puis recadrage selon le zoom */
+var ic=null;
+async function grabPhoto(){
+  try{
+    if(!window.ImageCapture||!S.track)return null;
+    if(!ic||ic.track!==S.track)ic=new ImageCapture(S.track);
+    var opt={},pc=null;
+    try{pc=await ic.getPhotoCapabilities();}catch(e){}
+    if(pc&&pc.imageWidth&&pc.imageHeight&&pc.imageWidth.max&&pc.imageHeight.max){
+      var W=pc.imageWidth.max,H=pc.imageHeight.max;
+      if(W*H>20e6){var q=Math.sqrt(20e6/(W*H));W=Math.round(W*q);H=Math.round(H*q);}
+      opt.imageWidth=W;opt.imageHeight=H;
+    }
+    var blob=await ic.takePhoto(opt);
+    var bmp=await createImageBitmap(blob);
+    var v=$('v'),va=v.videoWidth/v.videoHeight,pw=bmp.width,ph=bmp.height;
+    var cw=pw,ch=pw/va;
+    if(ch>ph){ch=ph;cw=ph*va;}
+    var hwA=1;try{hwA=(S.track.getSettings().zoom)||S.hw||1;}catch(e){hwA=S.hw||1;}
+    var dig=Math.max(1,S.zoom/hwA);
+    var sw=cw/dig,sh=ch/dig,sx=(pw-sw)/2,sy=(ph-sh)/2;
+    var long=Math.max(sw,sh),want=Math.max(long,Math.max(v.videoWidth,v.videoHeight));
+    var k=want/long,ow=Math.round(sw*k),oh=Math.round(sh*k);
+    var c=document.createElement('canvas');c.width=ow;c.height=oh;
+    var x=c.getContext('2d');x.imageSmoothingQuality='high';
+    x.drawImage(bmp,sx,sy,sw,sh,0,0,ow,oh);
+    if(bmp.close)bmp.close();
+    return c;
+  }catch(e){return null;}
+}
+/* Netteté : masque flou (unsharp mask) */
+function sharpen(c){
+  var amt=S.sharp/100;if(amt<=0)return c;
+  var w=c.width,h=c.height,b=document.createElement('canvas');b.width=w;b.height=h;
+  var bx=b.getContext('2d');bx.filter='blur('+Math.max(0.8,Math.min(w,h)/900).toFixed(2)+'px)';bx.drawImage(c,0,0);
+  var o=c.getContext('2d'),a=o.getImageData(0,0,w,h),bd=bx.getImageData(0,0,w,h).data,d=a.data,i,v;
+  for(i=0;i<d.length;i+=4){
+    v=d[i]+amt*(d[i]-bd[i]);d[i]=v<0?0:v>255?255:v;
+    v=d[i+1]+amt*(d[i+1]-bd[i+1]);d[i+1]=v<0?0:v>255?255:v;
+    v=d[i+2]+amt*(d[i+2]-bd[i+2]);d[i+2]=v<0?0:v>255?255:v;
+  }
+  o.putImageData(a,0,0);return c;
+}
+
 async function capture(){
   if(S.busy){S.cancel=true;return;}
   if(!S.track||!$('v').videoWidth){toast('Caméra non prête');return;}
@@ -516,8 +561,10 @@ async function capture(){
     var c;
     if(S.mode==='burst')c=await acquireBest();
     else if(S.mode==='stack')c=await acquireStack();
-    else c=grabFrame();
+    else{setStatus('Prise de la photo…');c=(await grabPhoto())||grabFrame();}
     if(!c){toast('Capture annulée');return;}
+    setStatus('Traitement…');
+    c=sharpen(c);
     c=applyFilter(c);
     var blob=await new Promise(function(r){c.toBlob(r,'image/jpeg',0.95);});
     flash();
@@ -705,6 +752,7 @@ $('chkGrid').onchange=function(){S.grid=this.checked;refreshUI();};
 $('chkLevel').onchange=function(){S.level=this.checked;refreshUI();};
 $('chkNight').onchange=function(){S.night=this.checked;refreshUI();};
 $('selN').onchange=function(){S.n=+this.value;};
+$('sharp').oninput=function(){S.sharp=+this.value;$('sharpo').textContent=S.sharp+'%';};
 $('thr').oninput=function(){S.thr=+this.value;$('thro').textContent=S.thr;};
 $('selRes').onchange=function(){S.res=this.value;save();startCamera();};
 
@@ -724,6 +772,7 @@ function refreshUI(){
   $('fSat').value=S.sat;$('fSatO').textContent=S.sat+'%';
   $('selFilter').value=S.filter;
   $('chkGrid').checked=S.grid;$('chkLevel').checked=S.level;$('chkNight').checked=S.night;
+  $('sharp').value=S.sharp;$('sharpo').textContent=S.sharp+'%';
   $('selN').value=String(S.n);$('thr').value=S.thr;$('thro').textContent=S.thr;
   $('selRes').value=S.res;
 }
