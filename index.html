@@ -43,7 +43,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family
 input[type=range]{accent-color:var(--acc);height:28px;margin:0;width:100%}
 .chips{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-bottom:6px}
 .tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px}
-.tools .btn{font-size:12px;padding:8px 2px;overflow-wrap:anywhere}
+.tools .btn{font-size:12px;padding:8px 2px;hyphens:manual}
 .main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .btn{background:var(--acc);color:var(--onacc);-webkit-text-fill-color:var(--onacc);border:0;border-radius:10px;font:700 13px/1.15 Roboto,system-ui,Arial,sans-serif;padding:8px 4px;min-height:38px;cursor:pointer}
 .btn.sm{min-width:44px;font-size:20px;padding:4px 10px}
@@ -123,7 +123,7 @@ select{flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line)
     <button class="btn" id="btnMode">Mode : Simple</button>
     <button class="btn" id="btnAuto">Auto-stable : Non</button>
     <button class="btn" id="btnTorch" hidden>Lampe</button>
-    <button class="btn" id="btnMicro">Microscope</button>
+    <button class="btn" id="btnMicro">Micro&shy;scope</button>
     <button class="btn" id="btnRec">● Vidéo</button>
     <button class="btn" id="btnGal">Galerie</button>
     <button class="btn" id="btnSet">Réglages</button>
@@ -386,10 +386,13 @@ function applyMicro(announce){
     if(fd&&fd.min!=null){$('focusM').value=0;adv({focusMode:'manual',focusDistance:fd.min},true);}
     else if(fm.indexOf('continuous')>=0){adv({focusMode:'continuous'},true);}
     if(S.caps.torch&&!S.torch){S.microTorch=true;setTorch(true,true);}
+    var ec=S.caps.exposureCompensation;
+    if(ec&&ec.min!=null&&ec.max!=null){S.microEc=true;var ev=clamp(-1,ec.min,ec.max);adv({exposureCompensation:ev},true);$('expC').value=ev;$('expCo').textContent=rnd(ev);}
     if(announce)toast('Mode microscope : approchez l’objectif de l’échantillon (quelques cm), réglez « Focus ». Essayez aussi une autre caméra (grand-angle) pour la macro.',5500);
   }else{
     adv({focusMode:'continuous'},true);
     if(S.microTorch){S.microTorch=false;setTorch(false,true);}
+    if(S.microEc&&S.caps.exposureCompensation){S.microEc=false;adv({exposureCompensation:0},true);$('expC').value=0;$('expCo').textContent='0';}
     if(announce)toast('Mode microscope désactivé');
   }
 }
@@ -790,7 +793,7 @@ $('thr').oninput=function(){S.thr=+this.value;$('thro').textContent=S.thr;};
 $('selRes').onchange=function(){S.res=this.value;save();startCamera();};
 
 function refreshUI(){
-  $('btnTimer').textContent='Retard : '+S.timer+' s';
+  $('btnTimer').textContent='Retard : '+S.timer+'\u00A0s';
   $('btnMode').textContent='Mode : '+MODELBL[S.mode];
   $('btnAuto').textContent='Auto-stable : '+(S.auto?'Oui':'Non');
   $('btnAuto').classList.toggle('on',S.auto);
